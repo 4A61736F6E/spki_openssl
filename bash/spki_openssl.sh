@@ -1,0 +1,263 @@
+#!/bin/bash
+
+SCRIPT_VERSION="v0.0.5"
+
+# Description:
+#   A proof-of-concept script that uses OpenSSL to generate message digests
+#   (thumbprints) for X.509 certificate files (e.g., private keys, signing
+#   requests, signed public keys). The script also provides thumbprints
+#   representing the subjectPublicKeyInfo (SPKI) for each file processed.
+
+
+# Global variables
+error_log=() # Array to store error messages
+
+digest_algorithm="SHA256"
+x509_private_key=''
+x509_signed_public_key=''
+x509_signing_request=''
+working_folder=`pwd`
+
+
+flag_openssl_installed=0
+
+
+
+usage() {
+cat <<EOF
+Usage: $(basename $0) (options)
+
+Description:
+    A proof-of-concept script that uses OpenSSL to generate message digests 
+    (thumbprints) for X.509 certificate files (e.g., private keys, signing 
+    requests, signed public keys). The script also provides thumbprints 
+    representing the subjectPublicKeyInfo (SPKI) data corresponding to the file.
+
+Options:
+  Required (choose one):
+    --private-key <file>        Path to a private key file.
+    --signing-request <file>    Path to a signing request file.
+    --signed-public-key <file>  Path to a signed public key file.
+
+  Optional:
+    --working-folder <folder>   Path to the working folder.
+    --digest-algorithm <name>   Digest algorithm (default: sha256). 
+                                Use 'openssl dgst -list' for supported options.
+    -h, --help                  Display this help message.
+
+EOF
+}
+
+
+check_dependencies() {
+    local return_status=0
+
+    printf "Checking Dependencies:\n"
+
+    # check for OpenSSL
+    # if failure, increment return_status
+    check_openssl
+    return_status+=$?
+
+    printf "\n"
+
+    return $return_status
+}
+
+
+# checks to ensure OpenSSL exits
+check_openssl(){
+    local return_status=0
+
+    printf "  openssl... "
+
+    type openssl > /dev/null 2>&1
+    return_status=$?
+
+    if [[ $return_status -ne 0 ]]; then
+        error_log+=("Warning: OpenSSL could not be found.")
+        printf "fail!\n"
+    else
+        printf "success (%s)\n" "$(openssl version | head -n 1)"
+        flag_openssl_installed=1
+    fi
+
+    return
+}
+
+
+show_parameters() {
+    printf "Parameters:\n"
+    printf "  Private Key        %s\n" "$x509_private_key"
+    printf "  Signing Request    %s\n" "$x509_signing_request"
+    printf "  Signed Public Key  %s\n" "$x509_signed_public_key"
+    printf "  Working Folder      %s\n" "$working_folder"
+    printf "\n"
+}
+
+
+# Display information about the private key file.
+show_private_key_info() {
+    printf "Private Key Digests:\n"
+
+    file_type=$(file $x509_private_key | awk -F ': ' '{print $2}')
+
+    # Thumbprint of the entire binary (DER) file.
+    certificate_thumbprint=$(
+        openssl dgst -$digest_algorithm -c $x509_private_key | 
+        awk '{print $2}')
+
+    # Thumbprint of the subjectPublicKeyInfo (SPKI) derived from the source private key.
+    spki_thumbprint=$(
+        openssl pkey -pubout -inform DER -outform DER -in $x509_private_key | 
+        openssl dgst -$digest_algorithm -c | 
+        awk '{print $2}')
+
+    printf "        File Path: %s\n" "$x509_private_key"
+    printf "        File Type: %s\n" "$file_type"
+    printf "  File Thumbprint: (%s) %s\n" "$digest_algorithm" "$certificate_thumbprint"
+    printf "  SPKI Thumbprint: (%s) %s\n" "$digest_algorithm" "$spki_thumbprint"
+    printf "\n"
+}
+
+
+show_signing_request_info() {
+    printf "Signing Request Digests:\n"
+
+    file_type=$(file $x509_signing_request | awk -F ': ' '{print $2}')
+
+    # Thumbprint of the entire binary (DER) file.
+    csr_thumbprint=$(
+        openssl dgst -$digest_algorithm -c $x509_signing_request | 
+        awk '{print $2}')
+
+    # Thumbprint of the subjectPublicKeyInfo (SPKI) extracted from the signing request.
+    spki_thumbprint=$(
+        openssl req -pubkey -inform DER -outform PEM -in $x509_signing_request | 
+        sed -n '/BEGIN\ PUBLIC\ KEY/,/END\ PUBLIC\ KEY/p' | 
+        openssl asn1parse -noout -inform PEM -out /dev/stdout | 
+        openssl dgst -$digest_algorithm -c | awk '{print $2}')
+
+    printf "        File Path: %s\n" "$x509_signing_request"
+    printf "        File Type: %s\n" "$file_type"
+    printf "  File Thumbprint: (%s) %s\n" "$digest_algorithm" "$csr_thumbprint"
+    printf "  SPKI Thumbprint: (%s) %s\n" "$digest_algorithm" "$spki_thumbprint"
+    printf "\n"
+}
+
+
+show_signed_public_key_info() {
+    printf "Signed Public Key Digests:\n"
+
+    file_type=$(file $x509_signed_public_key | awk -F ': ' '{print $2}')
+
+    # Thumbprint of the entire binary (DER) file.
+    certificate_thumbprint=$(
+        openssl dgst -$digest_algorithm -c $x509_signed_public_key | 
+        awk '{print $2}')
+
+    # Thumbprint of the subjectPublicKeyInfo (SPKI) extracted from the signed public key.
+    spki_thumbprint=$(
+        openssl x509 -pubkey -inform DER -in $x509_signed_public_key | 
+        sed -n '/BEGIN\ PUBLIC\ KEY/,/END\ PUBLIC\ KEY/p' | 
+        openssl asn1parse -noout -inform PEM -out /dev/stdout | 
+        openssl dgst -$digest_algorithm -c | awk '{print $2}')
+
+    printf "        File Path: %s\n" "$x509_signed_public_key"
+    printf "        File Type: %s\n" "$file_type"
+    printf "  File Thumbprint: (%s) %s\n" "$digest_algorithm" "$certificate_thumbprint"
+    printf "  SPKI Thumbprint: (%s) %s\n" "$digest_algorithm" "$spki_thumbprint"
+    printf "\n"
+}
+
+
+# displays any errors in the error log
+check_errors() {
+    # print any errors that might have been encountered.
+    total_errors=${#error_log[@]}
+    if [ "${total_errors}" -gt 0 ]; then
+        printf "Error(s) encountered: (%d)\n" "${total_errors}"
+        for (( i=0; i<"$total_errors"; i++)) do
+            printf " %2d: %s\n" "$((i + 1))" "${error_log[$i]}"
+        done
+
+        printf "\n"
+        return 1
+    fi
+}
+
+
+main() {
+    printf "\n"
+    printf "   Script: %s (%s)\n" "$(basename $0)" "$SCRIPT_VERSION"
+    printf "Timestamp: %s\n" "$(date +"%Y-%m-%d %H:%M:%S %Z")"
+    printf "\n"
+   
+    # if no arguments are passed, then display the usage
+    if [ "$#" -eq 0 ]; then
+        error_log+=("Error: Choose one or more required options.")
+        usage
+        exit 1
+    fi
+
+    while [[ "$#" -gt 0 ]]; do
+        param=$(echo "$1" | tr '[:upper:]' '[:lower:]')
+        case $1 in
+            -h|--help)
+                usage
+                exit 0
+                ;;
+            --private-key)
+                x509_private_key=$2
+                shift; shift
+                ;;
+            --signing-request)
+                x509_signing_request=$2
+                shift; shift
+                ;;
+            --signed-public-key)
+                x509_signed_public_key=$2
+                shift; shift
+                ;;
+            --working-folder)
+                working_folder=$2
+                shift; shift
+                ;;
+            --digest-algorithm)
+                digest_algorithm=$(echo $2 | tr '[:lower:]' '[:upper:]')
+                shift; shift
+                ;;
+            *)
+                error_log+=("Unknown option: $1")
+                usage
+                exit 1
+                ;;
+        esac
+    done
+
+
+
+    check_dependencies
+
+    #show_parameters
+
+    # if x509_private_key is set, then show the private key information
+    if [ -n "$x509_private_key" ]; then
+        show_private_key_info
+    fi
+
+    # if x509_signing_request is set, then show the signing request information
+    if [ -n "$x509_signing_request" ]; then
+        show_signing_request_info
+    fi
+
+    if [ -n "$x509_signed_public_key" ]; then
+        show_signed_public_key_info
+    fi
+
+
+}
+
+
+main "$@"
+check_errors

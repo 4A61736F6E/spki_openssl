@@ -1,0 +1,17 @@
+[tool.poetry]
+name = "spki-openssl"
+version = "0.1.0"
+description = "spki_openssl, Juypter Notebook research of X.509 SubjectPublicKeyInfo"
+authors = ["Jason Link <jsn.link@gmail.com>"]
+license = "MIT"
+readme = "README.md"
+
+[tool.poetry.dependencies]
+python = "^3.11"
+
+[tool.poetry.group.dev.dependencies]
+notebook = "^7.2.2"
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
