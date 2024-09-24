@@ -243,16 +243,31 @@ main() {
 
     # if x509_private_key is set, then show the private key information
     if [ -n "$x509_private_key" ]; then
-        show_private_key_info
+        # if file exists, then show the private key information
+        if [ -f "$x509_private_key" ]; then
+            show_private_key_info
+        else
+            error_log+=("Error: Private key file not found.")
+        fi
     fi
 
     # if x509_signing_request is set, then show the signing request information
     if [ -n "$x509_signing_request" ]; then
-        show_signing_request_info
+        # if file exists, then show the signing request information
+        if [ -f "$x509_signing_request" ]; then
+            show_signing_request_info
+        else
+            error_log+=("Error: Signing request file not found.")
+        fi
     fi
 
     if [ -n "$x509_signed_public_key" ]; then
-        show_signed_public_key_info
+        # if file exists, then show the signed public key information
+        if [ -f "$x509_signed_public_key" ]; then
+            show_signed_public_key_info
+        else
+            error_log+=("Error: Signed public key file not found.")
+        fi
     fi
 
 
