@@ -1,6 +1,6 @@
 #!/bin/bash
 
-SCRIPT_VERSION="v0.0.5"
+SCRIPT_VERSION="v0.0.6"
 
 # Description:
 #   A proof-of-concept script that uses OpenSSL to generate message digests
@@ -108,10 +108,19 @@ show_private_key_info() {
         awk '{print $2}')
 
     # Thumbprint of the subjectPublicKeyInfo (SPKI) derived from the source private key.
-    spki_thumbprint=$(
-        openssl pkey -pubout -inform DER -outform DER -in $x509_private_key | 
-        openssl dgst -$digest_algorithm -c | 
-        awk '{print $2}')
+
+    # if file_type begins with 'ASCII' or 'PEM', then the file is a PEM file.
+    if [[ "$file_type" == "ASCII"* ]] || [[ "$file_type" == "PEM"* ]]; then
+        spki_thumbprint=$(
+            openssl pkey -pubout -inform PEM -outform DER -in $x509_private_key | 
+            openssl dgst -$digest_algorithm -c | 
+            awk '{print $2}')
+    else
+        spki_thumbprint=$(
+            openssl pkey -pubout -inform DER -outform DER -in $x509_private_key | 
+            openssl dgst -$digest_algorithm -c | 
+            awk '{print $2}')
+    fi
 
     printf "        File Path: %s\n" "$x509_private_key"
     printf "        File Type: %s\n" "$file_type"
@@ -126,17 +135,27 @@ show_signing_request_info() {
 
     file_type=$(file $x509_signing_request | awk -F ': ' '{print $2}')
 
-    # Thumbprint of the entire binary (DER) file.
+    # Thumbprint of the entire file.
     csr_thumbprint=$(
         openssl dgst -$digest_algorithm -c $x509_signing_request | 
         awk '{print $2}')
 
     # Thumbprint of the subjectPublicKeyInfo (SPKI) extracted from the signing request.
-    spki_thumbprint=$(
-        openssl req -pubkey -inform DER -outform PEM -in $x509_signing_request | 
-        sed -n '/BEGIN\ PUBLIC\ KEY/,/END\ PUBLIC\ KEY/p' | 
-        openssl asn1parse -noout -inform PEM -out /dev/stdout | 
-        openssl dgst -$digest_algorithm -c | awk '{print $2}')
+
+    # IF file_type begins with PEM, then the file is a PEM file.
+    if [[ "$file_type" == "PEM"* ]]; then
+        spki_thumbprint=$(
+            openssl req -pubkey -inform PEM -outform PEM -in $x509_signing_request | 
+            sed -n '/BEGIN\ PUBLIC\ KEY/,/END\ PUBLIC\ KEY/p' | 
+            openssl asn1parse -noout -inform PEM -out /dev/stdout | 
+            openssl dgst -$digest_algorithm -c | awk '{print $2}')
+    else
+        spki_thumbprint=$(
+            openssl req -pubkey -inform DER -outform PEM -in $x509_signing_request | 
+            sed -n '/BEGIN\ PUBLIC\ KEY/,/END\ PUBLIC\ KEY/p' | 
+            openssl asn1parse -noout -inform PEM -out /dev/stdout | 
+            openssl dgst -$digest_algorithm -c | awk '{print $2}')
+    fi
 
     printf "        File Path: %s\n" "$x509_signing_request"
     printf "        File Type: %s\n" "$file_type"
@@ -157,11 +176,20 @@ show_signed_public_key_info() {
         awk '{print $2}')
 
     # Thumbprint of the subjectPublicKeyInfo (SPKI) extracted from the signed public key.
-    spki_thumbprint=$(
-        openssl x509 -pubkey -inform DER -in $x509_signed_public_key | 
-        sed -n '/BEGIN\ PUBLIC\ KEY/,/END\ PUBLIC\ KEY/p' | 
-        openssl asn1parse -noout -inform PEM -out /dev/stdout | 
-        openssl dgst -$digest_algorithm -c | awk '{print $2}')
+
+    if [[ "$file_type" == "PEM"* ]]; then
+        spki_thumbprint=$(
+            openssl x509 -pubkey -inform PEM -in $x509_signed_public_key | 
+            sed -n '/BEGIN\ PUBLIC\ KEY/,/END\ PUBLIC\ KEY/p' | 
+            openssl asn1parse -noout -inform PEM -out /dev/stdout | 
+            openssl dgst -$digest_algorithm -c | awk '{print $2}')
+    else
+        spki_thumbprint=$(
+            openssl x509 -pubkey -inform DER -in $x509_signed_public_key | 
+            sed -n '/BEGIN\ PUBLIC\ KEY/,/END\ PUBLIC\ KEY/p' | 
+            openssl asn1parse -noout -inform PEM -out /dev/stdout | 
+            openssl dgst -$digest_algorithm -c | awk '{print $2}')
+    fi
 
     printf "        File Path: %s\n" "$x509_signed_public_key"
     printf "        File Type: %s\n" "$file_type"
