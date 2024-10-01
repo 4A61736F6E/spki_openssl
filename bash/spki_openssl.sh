@@ -16,16 +16,13 @@ digest_algorithm="SHA256"
 x509_private_key=''
 x509_signed_public_key=''
 x509_signing_request=''
-working_folder=`pwd`
-
-
-flag_openssl_installed=0
+working_folder=$(pwd)
 
 
 
 usage() {
 cat <<EOF
-Usage: $(basename $0) (options)
+Usage: $(basename "$0") (options)
 
 Description:
     A proof-of-concept script that uses OpenSSL to generate message digests 
@@ -57,7 +54,7 @@ check_dependencies() {
     # check for OpenSSL
     # if failure, increment return_status
     check_openssl
-    return_status+=$?
+    (( return_status += $? ))
 
     printf "\n"
 
@@ -79,7 +76,6 @@ check_openssl(){
         printf "fail!\n"
     else
         printf "success (%s)\n" "$(openssl version | head -n 1)"
-        flag_openssl_installed=1
     fi
 
     return
@@ -100,11 +96,11 @@ show_parameters() {
 show_private_key_info() {
     printf "Private Key Digests:\n"
 
-    file_type=$(file $x509_private_key | awk -F ': ' '{print $2}')
+    file_type=$(file "$x509_private_key" | awk -F ': ' '{print $2}')
 
     # Thumbprint of the entire binary (DER) file.
     certificate_thumbprint=$(
-        openssl dgst -$digest_algorithm -c $x509_private_key | 
+        openssl dgst -"$digest_algorithm" -c "$x509_private_key" | 
         awk '{print $2}')
 
     # Thumbprint of the subjectPublicKeyInfo (SPKI) derived from the source private key.
@@ -112,13 +108,13 @@ show_private_key_info() {
     # if file_type begins with 'ASCII' or 'PEM', then the file is a PEM file.
     if [[ "$file_type" == "ASCII"* ]] || [[ "$file_type" == "PEM"* ]]; then
         spki_thumbprint=$(
-            openssl pkey -pubout -inform PEM -outform DER -in $x509_private_key | 
-            openssl dgst -$digest_algorithm -c | 
+            openssl pkey -pubout -inform PEM -outform DER -in "$x509_private_key" | 
+            openssl dgst -"$digest_algorithm" -c | 
             awk '{print $2}')
     else
         spki_thumbprint=$(
-            openssl pkey -pubout -inform DER -outform DER -in $x509_private_key | 
-            openssl dgst -$digest_algorithm -c | 
+            openssl pkey -pubout -inform DER -outform DER -in "$x509_private_key" | 
+            openssl dgst -"$digest_algorithm" -c | 
             awk '{print $2}')
     fi
 
@@ -133,11 +129,11 @@ show_private_key_info() {
 show_signing_request_info() {
     printf "Signing Request Digests:\n"
 
-    file_type=$(file $x509_signing_request | awk -F ': ' '{print $2}')
+    file_type=$(file "$x509_signing_request" | awk -F ': ' '{print $2}')
 
     # Thumbprint of the entire file.
     csr_thumbprint=$(
-        openssl dgst -$digest_algorithm -c $x509_signing_request | 
+        openssl dgst -"$digest_algorithm" -c "$x509_signing_request" | 
         awk '{print $2}')
 
     # Thumbprint of the subjectPublicKeyInfo (SPKI) extracted from the signing request.
@@ -145,16 +141,16 @@ show_signing_request_info() {
     # IF file_type begins with PEM, then the file is a PEM file.
     if [[ "$file_type" == "PEM"* ]]; then
         spki_thumbprint=$(
-            openssl req -pubkey -inform PEM -outform PEM -in $x509_signing_request | 
+            openssl req -pubkey -inform PEM -outform PEM -in "$x509_signing_request" | 
             sed -n '/BEGIN\ PUBLIC\ KEY/,/END\ PUBLIC\ KEY/p' | 
             openssl asn1parse -noout -inform PEM -out /dev/stdout | 
-            openssl dgst -$digest_algorithm -c | awk '{print $2}')
+            openssl dgst -"$digest_algorithm" -c | awk '{print $2}')
     else
         spki_thumbprint=$(
-            openssl req -pubkey -inform DER -outform PEM -in $x509_signing_request | 
+            openssl req -pubkey -inform DER -outform PEM -in "$x509_signing_request" | 
             sed -n '/BEGIN\ PUBLIC\ KEY/,/END\ PUBLIC\ KEY/p' | 
             openssl asn1parse -noout -inform PEM -out /dev/stdout | 
-            openssl dgst -$digest_algorithm -c | awk '{print $2}')
+            openssl dgst -"$digest_algorithm" -c | awk '{print $2}')
     fi
 
     printf "        File Path: %s\n" "$x509_signing_request"
@@ -168,27 +164,27 @@ show_signing_request_info() {
 show_signed_public_key_info() {
     printf "Signed Public Key Digests:\n"
 
-    file_type=$(file $x509_signed_public_key | awk -F ': ' '{print $2}')
+    file_type=$(file "$x509_signed_public_key" | awk -F ': ' '{print $2}')
 
     # Thumbprint of the entire binary (DER) file.
     certificate_thumbprint=$(
-        openssl dgst -$digest_algorithm -c $x509_signed_public_key | 
+        openssl dgst -"$digest_algorithm" -c "$x509_signed_public_key" | 
         awk '{print $2}')
 
     # Thumbprint of the subjectPublicKeyInfo (SPKI) extracted from the signed public key.
 
     if [[ "$file_type" == "PEM"* ]]; then
         spki_thumbprint=$(
-            openssl x509 -pubkey -inform PEM -in $x509_signed_public_key | 
+            openssl x509 -pubkey -inform PEM -in "$x509_signed_public_key" | 
             sed -n '/BEGIN\ PUBLIC\ KEY/,/END\ PUBLIC\ KEY/p' | 
             openssl asn1parse -noout -inform PEM -out /dev/stdout | 
-            openssl dgst -$digest_algorithm -c | awk '{print $2}')
+            openssl dgst -"$digest_algorithm" -c | awk '{print $2}')
     else
         spki_thumbprint=$(
-            openssl x509 -pubkey -inform DER -in $x509_signed_public_key | 
+            openssl x509 -pubkey -inform DER -in "$x509_signed_public_key" | 
             sed -n '/BEGIN\ PUBLIC\ KEY/,/END\ PUBLIC\ KEY/p' | 
             openssl asn1parse -noout -inform PEM -out /dev/stdout | 
-            openssl dgst -$digest_algorithm -c | awk '{print $2}')
+            openssl dgst -"$digest_algorithm" -c | awk '{print $2}')
     fi
 
     printf "        File Path: %s\n" "$x509_signed_public_key"
@@ -217,7 +213,7 @@ check_errors() {
 
 main() {
     printf "\n"
-    printf "   Script: %s (%s)\n" "$(basename $0)" "$SCRIPT_VERSION"
+    printf "   Script: %s (%s)\n" "$(basename "$0")" "$SCRIPT_VERSION"
     printf "Timestamp: %s\n" "$(date +"%Y-%m-%d %H:%M:%S %Z")"
     printf "\n"
    
@@ -229,7 +225,6 @@ main() {
     fi
 
     while [[ "$#" -gt 0 ]]; do
-        param=$(echo "$1" | tr '[:upper:]' '[:lower:]')
         case $1 in
             -h|--help)
                 usage
@@ -252,7 +247,7 @@ main() {
                 shift; shift
                 ;;
             --digest-algorithm)
-                digest_algorithm=$(echo $2 | tr '[:lower:]' '[:upper:]')
+                digest_algorithm=$(echo "$2" | tr '[:lower:]' '[:upper:]')
                 shift; shift
                 ;;
             *)
