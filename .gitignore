@@ -168,5 +168,5 @@ cython_debug/
 notebook/data/*
 
 .python-version
-
+.vscode/
 tests/*

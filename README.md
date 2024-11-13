@@ -127,28 +127,28 @@ Exploring [RFC 5280, Section 4.1](https://datatracker.ietf.org/doc/html/rfc5280#
 
 ```text
 Certificate  ::=  SEQUENCE  {
-        tbsCertificate       TBSCertificate,
-        signatureAlgorithm   AlgorithmIdentifier,
-        signatureValue       BIT STRING  }
+    tbsCertificate       TBSCertificate,
+    signatureAlgorithm   AlgorithmIdentifier,
+    signatureValue       BIT STRING  }
 
 TBSCertificate  ::=  SEQUENCE  {
-        version         [0]  EXPLICIT Version DEFAULT v1,
-        serialNumber         CertificateSerialNumber,
-        signature            AlgorithmIdentifier,
-        issuer               Name,
-        validity             Validity,
-        subject              Name,
-        subjectPublicKeyInfo SubjectPublicKeyInfo,
-        issuerUniqueID  [1]  IMPLICIT UniqueIdentifier OPTIONAL,
-                            -- If present, version MUST be v2 or v3
-        subjectUniqueID [2]  IMPLICIT UniqueIdentifier OPTIONAL,
-                            -- If present, version MUST be v2 or v3
-        extensions      [3]  EXPLICIT Extensions OPTIONAL
-                            -- If present, version MUST be v3 }
+    version         [0]  EXPLICIT Version DEFAULT v1,
+    serialNumber         CertificateSerialNumber,
+    signature            AlgorithmIdentifier,
+    issuer               Name,
+    validity             Validity,
+    subject              Name,
+    subjectPublicKeyInfo SubjectPublicKeyInfo,
+    issuerUniqueID  [1]  IMPLICIT UniqueIdentifier OPTIONAL,
+                        -- If present, version MUST be v2 or v3
+    subjectUniqueID [2]  IMPLICIT UniqueIdentifier OPTIONAL,
+                        -- If present, version MUST be v2 or v3
+    extensions      [3]  EXPLICIT Extensions OPTIONAL
+                        -- If present, version MUST be v3 }
 
 SubjectPublicKeyInfo  ::=  SEQUENCE  {
-        algorithm            AlgorithmIdentifier,
-        subjectPublicKey     BIT STRING  }
+    algorithm            AlgorithmIdentifier,
+    subjectPublicKey     BIT STRING  }
 
 ```
 
@@ -177,6 +177,7 @@ subjectPublicKeyInfo SubjectPublicKeyInfo SEQUENCE (2 elem)
         subjectPublicKey BIT STRING (520 bit) 
 ```
 
+# spki_openssl.sh
 
 # SubjectPublicKeyInfo using OpenSSL
 
@@ -193,7 +194,7 @@ In the below samples, we compare the thumbprints of public key material extracte
 
 ```shell
 # RSA Private Key
-openssl pkey -pubout -inform DER -outform DER -in rsa_private-key.der | \
+$ openssl pkey -pubout -inform DER -outform DER -in rsa_private-key.der | \
 openssl dgst -sha256 -c
 
 SHA2-256(stdin)= ab:a9:c4:31:a6:48:c0:0b:bc:69:fa:0d:f9:39:4b:b7:01:e9:77:14:13:f1:d0:e8:68:66:c2:9d:c4:ea:c7:2d
@@ -254,17 +255,45 @@ SHA2-256(stdin)= ab:a9:c4:31:a6:48:c0:0b:bc:69:fa:0d:f9:39:4b:b7:01:e9:77:14:13:
 Similar to the previous step, we pipe the PEM data to `sed` where the `PUBLIC KEY` portion is extracted and then fed to `openssl asn1parse` for conversion into binary form where we compute the digest.
 
 
+```shell
+# RSA Private Key SubjectPublicKeyInfo Digest (ASCII input, then Binary)
+$ openssl pkey -pubout -inform PEM -outform DER -in rsa_private-key.pem | \
+openssl dgst -sha256 -c
+SHA2-256(stdin)= a1:3c:1e:5b:cb:b9:ef:17:0c:9f:fe:34:35:c7:e6:96:13:63:04:8d:c5:c1:7e:86:c0:cc:bd:35:33:30:17:0f
+
+$ openssl pkey -pubout -inform DER -outform DER -in rsa_private-key.der | \
+openssl dgst -sha256 -c
+
+SHA2-256(stdin)= a1:3c:1e:5b:cb:b9:ef:17:0c:9f:fe:34:35:c7:e6:96:13:63:04:8d:c5:c1:7e:86:c0:cc:bd:35:33:30:17:0f
+
+# RSA Signing Request SubjectPublicKeyInfo Digest
+$ openssl req -pubkey -inform PEM -outform PEM -in rsa_signing-request.pem | \
+sed -n '/BEGIN\ PUBLIC\ KEY/,/END\ PUBLIC\ KEY/p' | \
+openssl asn1parse -noout -inform PEM -out /dev/stdout | \
+openssl dgst -sha256 -c
+
+SHA2-256(stdin)= a1:3c:1e:5b:cb:b9:ef:17:0c:9f:fe:34:35:c7:e6:96:13:63:04:8d:c5:c1:7e:86:c0:cc:bd:35:33:30:17:0f
+
+# RSA Signed Public Key SubjectPublicKeyInfo Digest
+$ openssl x509 -pubkey -inform PEM -in rsa_self-signed-public-key.pem | \
+sed -n '/BEGIN\ PUBLIC\ KEY/,/END\ PUBLIC\ KEY/p' | \
+openssl asn1parse -noout -inform PEM -out /dev/stdout | \
+openssl dgst -sha256 -c
+
+SHA2-256(stdin)= a1:3c:1e:5b:cb:b9:ef:17:0c:9f:fe:34:35:c7:e6:96:13:63:04:8d:c5:c1:7e:86:c0:cc:bd:35:33:30:17:0f
+```
+
 The same commands work just as well for Elliptic Curve keys.
 
 ```shell
 # EC Private Key
-$ openssl pkey -pubout -inform DER -outform DER -in ec_private-key.der | \
+$ openssl pkey -pubout -inform PEM -outform DER -in ec_private-key.pem | \
 openssl dgst -sha256 -c
 
 SHA2-256(stdin)= 1d:29:21:88:d7:6d:59:5e:da:2a:8a:3b:dd:d0:5f:ec:5e:19:7f:59:bb:e5:0a:bc:4a:e7:95:47:46:86:2b:37
 
 # EC Signing Request
-$ openssl req -pubkey -inform DER -outform PEM -in ec_signing-requestder | \
+$ openssl req -pubkey -inform PEM -outform PEM -in ec_signing-request.pem | \
 sed -n '/BEGIN\ PUBLIC\ KEY/,/END\ PUBLIC\ KEY/p' | \
 openssl asn1parse -noout -inform PEM -out /dev/stdout | \
 openssl dgst -sha256 -c
@@ -272,7 +301,7 @@ openssl dgst -sha256 -c
 SHA2-256(stdin)= 1d:29:21:88:d7:6d:59:5e:da:2a:8a:3b:dd:d0:5f:ec:5e:19:7f:59:bb:e5:0a:bc:4a:e7:95:47:46:86:2b:37
 
 # EC Signed Public Key
-$ openssl x509 -pubkey -inform pem -in ec_self-signed-public-key.pem | \
+$ openssl x509 -pubkey -inform PEM -in ec_self-signed-public-key.pem | \
 sed -n '/BEGIN\ PUBLIC\ KEY/,/END\ PUBLIC\ KEY/p' | \
 openssl asn1parse -noout -inform PEM -out /dev/stdout | \
 openssl dgst -sha256 -c
