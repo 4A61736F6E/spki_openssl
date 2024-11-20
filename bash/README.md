@@ -69,7 +69,6 @@ Signed Public Key Digests:
 ```
 
 ## EC files
-You can also elect to only focus on a single file.  Below is an example of only focusing on a public key and we chose to use the SHA-1 algorithm.
 
 ```shell
 $ spki_openssl.sh \
@@ -102,9 +101,31 @@ Signed Public Key Digests:
   SPKI Thumbprint: (SHA256) 04:35:1c:96:ef:26:b6:cf:6b:b4:b7:89:72:17:53:b7:9e:b9:09:60:e2:d3:2d:94:a8:fb:95:b0:b7:18:81:07
 ```
 
+You can also elect to only focus on a single file.  Below is an example of only focusing on a public key and we chose to use the SHA-1 algorithm.
+
+```shell
+# Command
+$ spki_openssl.sh \
+--signed-public-key ec_self-signed-public-key.der \
+--digest-algorithm sha512
+
+# Command Output
+   Script: spki_openssl.sh (v0.0.6)
+Timestamp: 2024-11-19 22:24:53 EST
+
+Checking Dependencies:
+  openssl... success (OpenSSL 3.4.0 22 Oct 2024 (Library: OpenSSL 3.4.0 22 Oct 2024))
+
+Signed Public Key Digests:
+        File Path: ec_self-signed-public-key.der
+        File Type: Certificate, Version=3
+  File Thumbprint: (SHA512) 58:24:d0:a1:55:59:84:2d:e9:cc:5c:02:5b:d8:5f:81:06:06:e3:84:a1:c5:e6:a9:b3:7f:3d:14:da:28:b7:70:63:50:c4:b8:26:0d:46:5b:a3:ce:28:69:9e:c8:4a:5a:60:3f:da:9a:df:0c:c3:0a:87:57:09:aa:c8:65:ef:4c
+  SPKI Thumbprint: (SHA512) 3f:6e:bd:a3:f1:88:1a:0a:04:c6:2d:0a:9d:4a:53:23:81:f0:17:8d:52:51:2e:62:4b:cd:e3:63:3a:98:f2:d7:48:e0:fe:2c:53:9d:ed:75:12:b7:12:1c:92:8f:e6:a9:99:20:5a:85:59:3a:ea:5e:06:8a:f2:b7:91:83:f6:ac
+```
+
 ## Specific Digest Algorithm
 
-The `--digest-algorithm` option accepts any valid algorithm supported by your OpenSSL deployment.
+The `--digest-algorithm` option accepts any _single_ valid algorithm supported by your OpenSSL deployment.  Present implementation of the shell script does not support multiple algorithms.
 
 ```shell
 $ openssl version
@@ -182,6 +203,8 @@ Private Key Digests:
 ## Symbolic Links
 
 It can be useful to create symbolic links to select keys and files for use with the bash shell script.  Rather than go through a whole other process of creating RSA and EC keys and certificates, just symlink the sample set.  By doing so you can see the same digests between the Jupyter Notebook and the bash shell script.
+
+This code segment was created to support the call for paper for GrrCON 2024 in Grand Rapids, Michigan.
 
 > Note: these commands create a symbolic link to files generated from the Jupyter Notebook, see [openssl.ipynb](../notebook/openssl.ipynb) and run through RSA and EC proof-of-concept cells.
 
