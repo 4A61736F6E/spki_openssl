@@ -5,6 +5,7 @@ description = "spki_openssl, Juypter Notebook research of X.509 SubjectPublicKey
 authors = ["Jason Link <jsn.link@gmail.com>"]
 license = "MIT"
 readme = "README.md"
+package-mode = false
 
 [tool.poetry.dependencies]
 python = "^3.11"
