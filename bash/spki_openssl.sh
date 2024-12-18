@@ -1,6 +1,6 @@
 #!/bin/bash
 
-SCRIPT_VERSION="v0.0.6"
+SCRIPT_VERSION="v0.0.7"
 
 # Description:
 #   A proof-of-concept script that uses OpenSSL to generate message digests
@@ -105,8 +105,15 @@ show_private_key_info() {
 
     # Thumbprint of the subjectPublicKeyInfo (SPKI) derived from the source private key.
 
-    # if file_type begins with 'ASCII' or 'PEM', then the file is a PEM file.
-    if [[ "$file_type" == "ASCII"* ]] || [[ "$file_type" == "PEM"* ]]; then
+    # There is a disrepancy between macOS and Linux (Kali) versions of `file` commmand.  
+    # macOS: file --version   file-5.45
+    # Kali:  file --version   file-5.41
+    # 
+    # With macOS, the ASCII (PEM) encoded private key is identified as 'ASCII text'.
+    # With Kali, the ASCII (PEM) encoded private key is identified as 'OpenSSH private key (no password)'.
+    # 
+    # Noted here in the event there are additional permutations of ASCII key files.
+    if [[ "$file_type" == "ASCII"* ]] || [[ "$file_type" == "OpenSSH private key"* ]] || [[ "$file_type" == "PEM"* ]]; then
         spki_thumbprint=$(
             openssl pkey -pubout -inform PEM -outform DER -in "$x509_private_key" | 
             openssl dgst -"$digest_algorithm" -c | 
