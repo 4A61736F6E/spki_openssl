@@ -25,15 +25,15 @@ If you search how to correlate certificate file types, a common response is to u
 
 ```shell
 # What is the raw output of the command?
-$ openssl rsa -noout -modulus -in rsa_private_key.der
+$ openssl rsa -noout -modulus -in rsa_private-key.der
 Modulus=D2743416B1F128F98FFFCA747A476A2BF4BD56173A4B62016180BBC436685A4967795EB54C9A496B7E057F0728E5F6FCA85A17A7BDD79C801C013EB19643D0FE4897322987522576E97F9C2206AB3F2C8646A9C79D1EAEA64A6CC06552F90CAE3E135A5B1393F78427888FA03C7CE4AA21E980A956F14C3213CB8950D987FDA1614602746E6875890D492B707CD659387024902B434BF6578ECE089648DA31B829E8FAADCEF12273F44A2CD7E7260FD2A691DAA5B4BEE799950B1255AEAA0ABD29789D56840A2389D294CAF78E5AE988EF368CF53DF67EB1DE20795AF87D11590A376834E5AB900B59D26B65E313E4A08C118FDAFE05BCAB89F72F5CAC3A3099
 
 # Display the digest of the private key RSA modulus.
-$ openssl rsa -noout -modulus -in rsa_private_key.der | openssl sha256
+$ openssl rsa -noout -modulus -in rsa_private-key.der | openssl sha256
 SHA2-256(stdin)= 87a029b932a258fc3300c077322ccff54bae47a0b80a8a1a4c68cbfb9084656e
 
 # Display the digest of the signing request RSA modulus.
-$ openssl req -noout -modulus -in rsa_signing_request.der | openssl sha256
+$ openssl req -noout -modulus -in rsa_signing-request.der | openssl sha256
 SHA2-256(stdin)= 87a029b932a258fc3300c077322ccff54bae47a0b80a8a1a4c68cbfb9084656e
 
 # Display the digest of the signed certificate RSA modulus.
