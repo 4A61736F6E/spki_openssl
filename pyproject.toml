@@ -1,5 +1,5 @@
 [tool.poetry]
-name = "spki-openssl"
+name = "spki_openssl"
 version = "0.1.0"
 description = "spki_openssl, Juypter Notebook research of X.509 SubjectPublicKeyInfo"
 authors = ["Jason Link <jsn.link@gmail.com>"]
