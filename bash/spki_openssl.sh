@@ -1,12 +1,13 @@
 #!/bin/bash
 
-SCRIPT_VERSION="v0.0.7"
+SCRIPT_VERSION="v0.0.8"
 
 # Description:
 #   A proof-of-concept script that uses OpenSSL to generate message digests
 #   (thumbprints) for X.509 certificate files (e.g., private keys, signing
 #   requests, signed public keys). The script also provides thumbprints
-#   representing the subjectPublicKeyInfo (SPKI) for each file processed.
+#   representing the subjectPublicKeyInfo (SPKI) for each file processed,
+#   including public key pins in base64 format for HPKP use cases.
 
 
 # Global variables
@@ -28,7 +29,8 @@ Description:
     A proof-of-concept script that uses OpenSSL to generate message digests 
     (thumbprints) for X.509 certificate files (e.g., private keys, signing 
     requests, signed public keys). The script also provides thumbprints 
-    representing the subjectPublicKeyInfo (SPKI) data corresponding to the file.
+    representing the subjectPublicKeyInfo (SPKI) data corresponding to the file,
+    including public key pins in base64 format for HTTP Public Key Pinning (HPKP).
 
 Options:
   Required (choose one):
@@ -41,6 +43,10 @@ Options:
     --digest-algorithm <name>   Digest algorithm (default: sha256). 
                                 Use 'openssl dgst -list' for supported options.
     -h, --help                  Display this help message.
+
+Examples:
+    $(basename "$0") --signed-public-key cert.pem
+    $(basename "$0") --private-key key.pem --digest-algorithm sha1
 
 EOF
 }
@@ -114,21 +120,39 @@ show_private_key_info() {
     # 
     # Noted here in the event there are additional permutations of ASCII key files.
     if [[ "$file_type" == "ASCII"* ]] || [[ "$file_type" == "OpenSSH private key"* ]] || [[ "$file_type" == "PEM"* ]]; then
-        spki_thumbprint=$(
-            openssl pkey -pubout -inform PEM -outform DER -in "$x509_private_key" | 
+        spki_thumbprint=$(openssl pkey -pubout -inform PEM -outform DER -in "$x509_private_key" | 
             openssl dgst -"$digest_algorithm" -c | 
             awk '{print $2}')
+        pubkey_pin=$(openssl pkey -pubout -inform PEM -outform DER -in "$x509_private_key" | 
+            openssl dgst -"$digest_algorithm" -binary | base64)
     else
-        spki_thumbprint=$(
-            openssl pkey -pubout -inform DER -outform DER -in "$x509_private_key" | 
+        spki_thumbprint=$(openssl pkey -pubout -inform DER -outform DER -in "$x509_private_key" | 
             openssl dgst -"$digest_algorithm" -c | 
             awk '{print $2}')
+        pubkey_pin=$(openssl pkey -pubout -inform DER -outform DER -in "$x509_private_key" | 
+            openssl dgst -"$digest_algorithm" -binary | base64)
     fi
 
-    printf "        File Path: %s\n" "$x509_private_key"
-    printf "        File Type: %s\n" "$file_type"
-    printf "  File Thumbprint: (%s) %s\n" "$digest_algorithm" "$certificate_thumbprint"
-    printf "  SPKI Thumbprint: (%s) %s\n" "$digest_algorithm" "$spki_thumbprint"
+    # Calculate both PEM and DER file thumbprints regardless of source format
+    if [[ "$file_type" == "ASCII"* ]] || [[ "$file_type" == "OpenSSH private key"* ]] || [[ "$file_type" == "PEM"* ]]; then
+        # Source is PEM, calculate DER thumbprint by converting
+        pem_thumbprint="$certificate_thumbprint"
+        der_thumbprint=$(openssl pkey -inform PEM -outform DER -in "$x509_private_key" | 
+            openssl dgst -"$digest_algorithm" -c | awk '{print $2}')
+    else
+        # Source is DER, calculate PEM thumbprint by converting
+        der_thumbprint="$certificate_thumbprint"
+        pem_thumbprint=$(openssl pkey -inform DER -outform PEM -in "$x509_private_key" | 
+            openssl dgst -"$digest_algorithm" -c | awk '{print $2}')
+    fi
+
+    printf "         File Path: %s\n" "$x509_private_key"
+    printf "         File Type: %s\n" "$file_type"
+    printf "   File Thumbprint:\n"
+    printf "               DER: (%s) %s\n" "$digest_algorithm" "$der_thumbprint"
+    printf "               PEM: (%s) %s\n" "$digest_algorithm" "$pem_thumbprint"
+    printf "   SPKI Thumbprint: (%s) %s\n" "$digest_algorithm" "$spki_thumbprint"
+    printf "    Public Key Pin: (%s) %s\n" "$digest_algorithm" "$pubkey_pin"
     printf "\n"
 }
 
@@ -147,23 +171,45 @@ show_signing_request_info() {
 
     # IF file_type begins with PEM, then the file is a PEM file.
     if [[ "$file_type" == "PEM"* ]]; then
-        spki_thumbprint=$(
-            openssl req -pubkey -inform PEM -outform PEM -in "$x509_signing_request" | 
+        spki_thumbprint=$(openssl req -pubkey -inform PEM -outform PEM -in "$x509_signing_request" | 
             sed -n '/BEGIN\ PUBLIC\ KEY/,/END\ PUBLIC\ KEY/p' | 
             openssl asn1parse -noout -inform PEM -out /dev/stdout | 
             openssl dgst -"$digest_algorithm" -c | awk '{print $2}')
-    else
-        spki_thumbprint=$(
-            openssl req -pubkey -inform DER -outform PEM -in "$x509_signing_request" | 
+        pubkey_pin=$(openssl req -pubkey -inform PEM -outform PEM -in "$x509_signing_request" | 
             sed -n '/BEGIN\ PUBLIC\ KEY/,/END\ PUBLIC\ KEY/p' | 
             openssl asn1parse -noout -inform PEM -out /dev/stdout | 
+            openssl dgst -"$digest_algorithm" -binary | base64)
+    else
+        spki_thumbprint=$(openssl req -pubkey -inform DER -outform PEM -in "$x509_signing_request" | 
+            sed -n '/BEGIN\ PUBLIC\ KEY/,/END\ PUBLIC\ KEY/p' | 
+            openssl asn1parse -noout -inform PEM -out /dev/stdout | 
+            openssl dgst -"$digest_algorithm" -c | awk '{print $2}')
+        pubkey_pin=$(openssl req -pubkey -inform DER -outform PEM -in "$x509_signing_request" | 
+            sed -n '/BEGIN\ PUBLIC\ KEY/,/END\ PUBLIC\ KEY/p' | 
+            openssl asn1parse -noout -inform PEM -out /dev/stdout | 
+            openssl dgst -"$digest_algorithm" -binary | base64)
+    fi
+
+    # Calculate both PEM and DER file thumbprints regardless of source format
+    if [[ "$file_type" == "PEM"* ]]; then
+        # Source is PEM, calculate DER thumbprint by converting
+        pem_thumbprint="$csr_thumbprint"
+        der_thumbprint=$(openssl req -inform PEM -outform DER -in "$x509_signing_request" | 
+            openssl dgst -"$digest_algorithm" -c | awk '{print $2}')
+    else
+        # Source is DER, calculate PEM thumbprint by converting
+        der_thumbprint="$csr_thumbprint"
+        pem_thumbprint=$(openssl req -inform DER -outform PEM -in "$x509_signing_request" | 
             openssl dgst -"$digest_algorithm" -c | awk '{print $2}')
     fi
 
-    printf "        File Path: %s\n" "$x509_signing_request"
-    printf "        File Type: %s\n" "$file_type"
-    printf "  File Thumbprint: (%s) %s\n" "$digest_algorithm" "$csr_thumbprint"
-    printf "  SPKI Thumbprint: (%s) %s\n" "$digest_algorithm" "$spki_thumbprint"
+    printf "         File Path: %s\n" "$x509_signing_request"
+    printf "         File Type: %s\n" "$file_type"
+    printf "   File Thumbprint:\n"
+    printf "               DER: (%s) %s\n" "$digest_algorithm" "$der_thumbprint"
+    printf "               PEM: (%s) %s\n" "$digest_algorithm" "$pem_thumbprint"
+    printf "   SPKI Thumbprint: (%s) %s\n" "$digest_algorithm" "$spki_thumbprint"
+    printf "    Public Key Pin: (%s) %s\n" "$digest_algorithm" "$pubkey_pin"
     printf "\n"
 }
 
@@ -181,23 +227,45 @@ show_signed_public_key_info() {
     # Thumbprint of the subjectPublicKeyInfo (SPKI) extracted from the signed public key.
 
     if [[ "$file_type" == "PEM"* ]]; then
-        spki_thumbprint=$(
-            openssl x509 -pubkey -inform PEM -in "$x509_signed_public_key" | 
+        spki_thumbprint=$(openssl x509 -pubkey -inform PEM -in "$x509_signed_public_key" | 
             sed -n '/BEGIN\ PUBLIC\ KEY/,/END\ PUBLIC\ KEY/p' | 
             openssl asn1parse -noout -inform PEM -out /dev/stdout | 
             openssl dgst -"$digest_algorithm" -c | awk '{print $2}')
-    else
-        spki_thumbprint=$(
-            openssl x509 -pubkey -inform DER -in "$x509_signed_public_key" | 
+        pubkey_pin=$(openssl x509 -pubkey -inform PEM -in "$x509_signed_public_key" | 
             sed -n '/BEGIN\ PUBLIC\ KEY/,/END\ PUBLIC\ KEY/p' | 
             openssl asn1parse -noout -inform PEM -out /dev/stdout | 
+            openssl dgst -"$digest_algorithm" -binary | base64)
+    else
+        spki_thumbprint=$(openssl x509 -pubkey -inform DER -in "$x509_signed_public_key" | 
+            sed -n '/BEGIN\ PUBLIC\ KEY/,/END\ PUBLIC\ KEY/p' | 
+            openssl asn1parse -noout -inform PEM -out /dev/stdout | 
+            openssl dgst -"$digest_algorithm" -c | awk '{print $2}')
+        pubkey_pin=$(openssl x509 -pubkey -inform DER -in "$x509_signed_public_key" | 
+            sed -n '/BEGIN\ PUBLIC\ KEY/,/END\ PUBLIC\ KEY/p' | 
+            openssl asn1parse -noout -inform PEM -out /dev/stdout | 
+            openssl dgst -"$digest_algorithm" -binary | base64)
+    fi
+
+    # Calculate both PEM and DER file thumbprints regardless of source format
+    if [[ "$file_type" == "PEM"* ]]; then
+        # Source is PEM, calculate DER thumbprint by converting
+        pem_thumbprint="$certificate_thumbprint"
+        der_thumbprint=$(openssl x509 -inform PEM -outform DER -in "$x509_signed_public_key" | 
+            openssl dgst -"$digest_algorithm" -c | awk '{print $2}')
+    else
+        # Source is DER, calculate PEM thumbprint by converting
+        der_thumbprint="$certificate_thumbprint"  
+        pem_thumbprint=$(openssl x509 -inform DER -outform PEM -in "$x509_signed_public_key" | 
             openssl dgst -"$digest_algorithm" -c | awk '{print $2}')
     fi
 
-    printf "        File Path: %s\n" "$x509_signed_public_key"
-    printf "        File Type: %s\n" "$file_type"
-    printf "  File Thumbprint: (%s) %s\n" "$digest_algorithm" "$certificate_thumbprint"
-    printf "  SPKI Thumbprint: (%s) %s\n" "$digest_algorithm" "$spki_thumbprint"
+    printf "         File Path: %s\n" "$x509_signed_public_key"
+    printf "         File Type: %s\n" "$file_type"
+    printf "   File Thumbprint:\n"
+    printf "               DER: (%s) %s\n" "$digest_algorithm" "$der_thumbprint"
+    printf "               PEM: (%s) %s\n" "$digest_algorithm" "$pem_thumbprint"
+    printf "   SPKI Thumbprint: (%s) %s\n" "$digest_algorithm" "$spki_thumbprint"
+    printf "    Public Key Pin: (%s) %s\n" "$digest_algorithm" "$pubkey_pin"
     printf "\n"
 }
 
